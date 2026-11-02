@@ -664,7 +664,9 @@ public class Test implements DOMErrorHandler, LSResourceResolver {
 				(DOMImplementationLS) DOMImplementationRegistry.newInstance().getDOMImplementation(
 					"LS");
 			LSInput source = impl.createLSInput();
-			if (systemId.equals("personal.xsd")) {
+			// Sealed build: the parser hands the resolver the expanded systemId
+			// (file:///.../personal.xsd), so match on the suffix.
+			if (systemId != null && systemId.endsWith("personal.xsd")) {
 				source.setSystemId("data/personal.xsd");
 			}
 			else {

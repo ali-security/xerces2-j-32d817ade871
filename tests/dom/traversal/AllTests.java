@@ -30,7 +30,9 @@ import junit.textui.TestRunner;
 public class AllTests {
     
     public static void main(String[] args) {
-        TestRunner.run(AllTests.suite());
+        if (!TestRunner.run(AllTests.suite()).wasSuccessful()) {
+            System.exit(1);
+        }
     }
     
     public static Test suite() {

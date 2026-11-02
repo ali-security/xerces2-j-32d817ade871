@@ -1,0 +1,69 @@
+# Authored for the sealed build: upstream Xerces-J ships no GitHub Actions CI.
+# Mirrors the project's own build (build.sh -> bundled Ant 1.7.1 in tools/)
+# and its own sanity test suite (`build.sh test`).
+name: seal-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Space-separated test main classes (e.g. 'dom.ids.Test schema.config.AllTests'); empty runs the full `build.sh test` suite"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # tools/bin/xjavac.jar only prepends xml-apis to javac's bootclasspath on
+      # Sun/Oracle/IBM vendors; Zulu reports "Azul", so JDK 8's own older
+      # org.w3c.dom.html (rt.jar) would shadow tools/xml-apis.jar. Prepend it
+      # the same way XJavac does for Sun JDKs.
+      JAVA_TOOL_OPTIONS: -Xbootclasspath/p:${{ github.workspace }}/tools/xml-apis.jar
+    steps:
+      - uses: actions/checkout@v4
+
+      # The release was compiled by JDK 1.3.1 (class major 47); JDK 8 is the newest
+      # javac that still emits -target 1.3 and whose JVM honours the
+      # -Xbootclasspath/p used by build.xml's test target.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "8"
+
+      - name: Build xercesImpl.jar (build.sh jar)
+        run: |
+          unset ANT_HOME CLASSPATH ANT_OPTS
+          sh build.sh -Djavac.source=1.3 -Djavac.target=1.3 jar
+          mkdir -p dist
+          cp build/xercesImpl.jar dist/xercesImpl-2.12.0.jar
+          ls -l dist/
+
+      - name: Test (build.sh test)
+        env:
+          TEST_FILTER: ${{ inputs.test-filter }}
+        run: |
+          unset ANT_HOME CLASSPATH ANT_OPTS
+          set -o pipefail
+          if [ -z "$TEST_FILTER" ]; then
+            sh build.sh -Djavac.source=1.3 -Djavac.target=1.3 test 2>&1 | tee test-output.log
+          else
+            sh build.sh -Djavac.source=1.3 -Djavac.target=1.3 tests
+            BCP="tools/xml-apis.jar:tools/resolver.jar:tools/serializer.jar:tools/junit.jar:build/classes:build/tests"
+            for t in $TEST_FILTER; do
+              echo "Running $t ..."
+              java "-Xbootclasspath/p:$BCP" "$t" 2>&1 | tee -a test-output.log
+            done
+          fi
+          # The sanity programs (dom.*, thread.*, ...) report failed checks via
+          # dom.util.Assertion, which only prints and never exits non-zero.
+          if grep -n "Assertion failed\|FAILURES!!!" test-output.log; then
+            echo "Test assertions failed"; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xercesImpl
+          path: dist/xercesImpl-2.12.0.jar
+          if-no-files-found: error
