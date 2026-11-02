@@ -108,9 +108,11 @@ public class XML11EntityScanner
                 load(1, false);
             }
             if (c == '\r' && external) {
-                int cc = fCurrentEntity.ch[fCurrentEntity.position++];
-                if (cc != '\n' && cc != 0x85) {
-                    fCurrentEntity.position--;
+                if (fCurrentEntity.position < fCurrentEntity.count) {
+                    int cc = fCurrentEntity.ch[fCurrentEntity.position++];
+                    if (cc != '\n' && cc != 0x85) {
+                        fCurrentEntity.position--;
+                    }
                 }
             }
             c = '\n';
@@ -968,7 +970,7 @@ public class XML11EntityScanner
                 c = fCurrentEntity.ch[fCurrentEntity.position++];
                 // In internal entities control characters are allowed to appear unescaped.
                 if ((c == quote && !fCurrentEntity.literal)
-                    || c == '%' || !XML11Char.isXML11InternalEntityContent(c)) {
+                    || c == '%' || !(XML11Char.isXML11InternalEntityContent(c) || c == '\r' )) {
                     fCurrentEntity.position--;
                     break;
                 }
